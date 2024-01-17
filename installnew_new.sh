@@ -47,16 +47,67 @@ sudo su root -c "echo '#!/bin/sh' >> $NEW_OE_HOME_EXT/start.sh"
 sudo su root -c "echo 'sudo -u $NEW_OE_USER $NEW_OE_HOME_EXT/odoo-bin --config=/etc/${NEW_OE_CONFIG}.conf' >> $NEW_OE_HOME_EXT/start.sh"
 sudo chmod 755 $NEW_OE_HOME_EXT/start.sh
 
-# Create init file for the new instance (Adjust the init script as needed)
-# ...
+# Create init file for the new instance
+echo -e "* Create init file for new instance"
+cat <<EOF | sudo tee /etc/init.d/$NEW_OE_CONFIG
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides: $NEW_OE_CONFIG
+# Required-Start: \$remote_fs \$syslog
+# Required-Stop: \$remote_fs \$syslog
+# Should-Start: \$network
+# Should-Stop: \$network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Enterprise Business Applications
+# Description: Odoo New Business Applications
+### END INIT INFO
 
-# Enable the new Odoo instance to start on system boot
-echo -e "* Start New Odoo instance on Startup"
+DAEMON=$NEW_OE_HOME_EXT/odoo-bin
+NAME=$NEW_OE_CONFIG
+DESC=$NEW_OE_CONFIG
+CONFIGFILE="/etc/${NEW_OE_CONFIG}.conf"
+USER=$NEW_OE_USER
+PIDFILE=/var/run/\${NAME}.pid
+DAEMON_OPTS="-c \$CONFIGFILE"
+
+[ -x \$DAEMON ] || exit 0
+[ -f \$CONFIGFILE ] || exit 0
+
+case "\$1" in
+  start)
+    echo -n "Starting \${DESC}: "
+    start-stop-daemon --start --quiet --pidfile \$PIDFILE --chuid \$USER --background --make-pidfile --exec \$DAEMON -- \$DAEMON_OPTS
+    echo "\${NAME}."
+    ;;
+  stop)
+    echo -n "Stopping \${DESC}: "
+    start-stop-daemon --stop --quiet --pidfile \$PIDFILE --oknodo
+    echo "\${NAME}."
+    ;;
+  restart|force-reload)
+    echo -n "Restarting \${DESC}: "
+    start-stop-daemon --stop --quiet --pidfile \$PIDFILE --oknodo
+    sleep 1
+    start-stop-daemon --start --quiet --pidfile \$PIDFILE --chuid \$USER --background --make-pidfile --exec \$DAEMON -- \$DAEMON_OPTS
+    echo "\${NAME}."
+    ;;
+  *)
+    N=/etc/init.d/\$NAME
+    echo "Usage: \$N {start|stop|restart|force-reload}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
+EOF
+
+sudo chmod +x /etc/init.d/$NEW_OE_CONFIG
 sudo update-rc.d $NEW_OE_CONFIG defaults
 
 # Starting the new Odoo service
 echo -e "* Starting New Odoo Service"
-sudo su root -c "/etc/init.d/$NEW_OE_CONFIG start"
+sudo /etc/init.d/$NEW_OE_CONFIG start
 echo "-----------------------------------------------------------"
 echo "New Odoo instance setup completed."
 echo "Port: $NEW_OE_PORT"
